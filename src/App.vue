@@ -6,14 +6,19 @@
 	<el-container style="height: 1000px; border: 1px solid #eee">
     <!-- 菜单 -->
 		<el-aside width="250px" style="background-color: #eeeeee">
-			<el-menu default-openeds="1">
-				<el-submenu index="1">
+			<!-- <div style="height: 60px; text-align: center">Schedule Manager</div> -->
+			<el-header style="text-align: left; font-size: 12px">
+				<el-dropdown>
+				</el-dropdown>
+				<span class= "band">Schedule Manager</span>
+			</el-header>
+			<el-menu>
 					<template slot="title"><i class="el-icon-menu"></i>Guide</template>
 					<el-menu-item index="1-1" @click="newFormVisible = true">Create a new Schedule</el-menu-item>
 					<el-menu-item index="1-2" v-on:click="listRunningSchs">List Running Schedules</el-menu-item>
 					<el-menu-item index="1-3" v-on:click="listFiredSchs">List Fired Schedules</el-menu-item>
-          <el-menu-item index="1-4" >About us</el-menu-item>
-				</el-submenu>
+          <el-menu-item index="1-4" >About cronExpression</el-menu-item>
+					<el-menu-item index="1-5" >About us</el-menu-item>
 			</el-menu>
 		</el-aside>
 
@@ -21,7 +26,6 @@
 			<el-header style="text-align: left; font-size: 12px">
 				<el-dropdown>
 				</el-dropdown>
-				<span class= "band">{{head}}</span>
 			</el-header>
       <!-- 定时任务列表 -->
 			<el-main>
@@ -36,8 +40,8 @@
 					</el-table-column>
 					<el-table-column prop="description" label="description">
 					</el-table-column>
-					<span v-show:false prop="jobName"></span>
 					<span v-show:false prop="id"></span>
+					<span v-show:false prop="status"></span>
           <el-table-column prop="operation" label="operation">
             <template slot-scope="scope">
               <el-button
@@ -50,13 +54,13 @@
 	               type="info"
 	               @click="editSchedule(scope.$index,scope.row)"
 								 round
-								 v-show='scope.row.id != null'>edit</el-button>
+								 v-show='scope.row.status == "CREATE"'>edit</el-button>
               <el-button
                 size="mini"
                 type="danger"
                 @click="confirmDelete(scope.$index,scope.row)"
 								round
-								v-show='scope.row.id != null'>delete</el-button>
+								v-show='scope.row.status == "CREATE"'>delete</el-button>
             </template>
 					</el-table-column>
 				</el-table>
@@ -64,7 +68,7 @@
 		</el-container>
 
     <!-- 执行日志 -->
-    <el-dialog title="Schedule Running Log" :visible.sync="dialogTableVisible">
+    <el-dialog title="Schedule Running Log" style="width: 120%; margin-left: -10%" :visible.sync="dialogTableVisible">
       <el-table :data="logData">
         <el-table-column property="id" label="id" width="150">
 				</el-table-column>
@@ -82,7 +86,7 @@
           layout="prev, pager, next"
           :total="Page.pageNum"
 					:current-page.sync="Page.currentPage"
-					@current-change="getJobLogsByJobName(jobNameCache,Page.currentPage,Page.pageSize)">
+					@current-change="getJobLogsByJobId(jobIdCache,Page.currentPage,Page.pageSize)">
         </el-pagination>
       </div>
     </el-dialog>
@@ -135,7 +139,8 @@
 	            <span style="width: 150px">{{form.project}}</span>
 	          </el-form-item>
 	          <el-form-item label="url" :label-width="formLabelWidth">
-	            <span style="width: 150px">{{form.url}}</span>
+							<el-input v-model="form.url" auto-complete="off" style="width: 80%">
+	            </el-input>
 	          </el-form-item>
 	          <el-form-item label="description" :label-width="formLabelWidth">
 	            <el-input v-model="form.description" type="textarea" auto-complete="off" style="width: 300px"></el-input>
@@ -159,11 +164,11 @@
                 methods: [
                   'GET','POST','PUT','DELETE'
                 ],
-                host: '10.0.0.96:8085',
+                host: '10.0.0.104:9301',
                 tableData: [],
                 logData:[
                 ],
-								jobNameCache:'',
+								jobIdCache:'',
                 newFormVisible: false,
 								editFormVisible: false,
                 dialogTableVisible: false,
@@ -181,7 +186,8 @@
                   method:0,
 									jobName:'',
                   project: '',
-                  description:''
+                  description:'',
+									status:''
                 },
 								tbEnable:true,
                 formLabelWidth: '120px'
@@ -215,6 +221,7 @@
                         temp.url = runningSchs[i].url;
 												temp.jobName = runningSchs[i].jobName;
                         temp.description = runningSchs[i].description;
+												temp.status = runningSchs[i].status;
                         this.tableData[i] = temp;
                     }
                 }, function(response) {
@@ -249,6 +256,7 @@
 											temp.url = runningSchs[i].url;
 											temp.jobName = runningSchs[i].jobName;
 											temp.description = runningSchs[i].description;
+											temp.id = runningSchs[i].id;
 											this.tableData[i] = temp;
 									}
 							}, function(response) {
@@ -257,10 +265,10 @@
 							});
 						},
             //获取某个任务的运行日志
-            getJobLogsByJobName:function(jobName,pageNo,pageSize) {
-							  this.jobNameCache = jobName
-                this.$http.get('http://'+ this.host +'/scheduleManager/getJobLogsByJobName?'
-                    + 'jobName=' + this.jobNameCache + '&pageNo=' + pageNo + '&pageSize=' + pageSize, {}, {
+            getJobLogsByJobId:function(jobId,pageNo,pageSize) {
+							  this.jobIdCache = jobId
+                this.$http.get('http://'+ this.host +'/scheduleManager/getJobLogsByJobId?'
+                    + 'jobId=' + this.jobIdCache + '&pageNo=' + pageNo + '&pageSize=' + pageSize, {}, {
                     headers: {
                     },
 										emulateJSON: true
@@ -321,7 +329,6 @@
             },
 						//缓存定时任务
 						editSchedule(index, row){
-							console.log(index, row);
 							this.form.id = row.id;
 							this.form.name = row.name;
 							this.form.cron = row.cron;
@@ -337,7 +344,8 @@
                   , {
                     id:this.form.id,
                     cronExpression: this.form.cron,
-                    description:this.form.description
+                    description:this.form.description,
+										url:this.form.url
                   }, {
               }).then(function(response) {
                   // 这里是处理正确的回调
@@ -380,15 +388,10 @@
 							// this.handleDelete(index,row)
 						},
             showScheduleLog(index, row) {
-							this.getJobLogsByJobName(row.jobName,1,10)
-            },
-            handleEdit(index, row) {
-              console.log(index, row);
-            },
-            handleDelete(index, row) {
-              console.log(index, row);
+							this.getJobLogsByJobId(row.id,1,10)
             },
             clearForm() {
+							this.form.id = '';
 							this.form.name = '';
 							this.form.cron = '';
 							this.form.url = '';
@@ -404,7 +407,7 @@
               })
             },
 						confirmDelete(index,row) {
-							this.$confirm('Removing this schedule?', 'Waring', {
+							this.$confirm('Remove this schedule?', 'Waring', {
           			confirmButtonText: 'Confirm',
           			cancelButtonText: 'Cancel',
           			type: 'warning'
@@ -436,7 +439,7 @@
   }
 
 	.el-header {
-		background-color: #B3d2D1;
+		background-color: #B3c9D1;
 		color: #333;
 		line-height: 60px;
 	}
@@ -448,6 +451,6 @@
 	.band {
 		color: white;
 		font-family: 'Arial';
-		font-size: 25px;
+		font-size: 20px;
 	}
 </style>
