@@ -5,7 +5,7 @@
     </div> -->
 	<el-container style="height: 1000px; border: 1px solid #eee">
     <!-- 菜单 -->
-		<el-aside width="250px" style="background-color: #eeeeee">
+		<el-aside width="225px" style="background-color: #eeeeee">
 			<!-- <div style="height: 60px; text-align: center">Schedule Manager</div> -->
 			<el-header style="text-align: left; font-size: 12px">
 				<el-dropdown>
@@ -17,8 +17,9 @@
 					<el-menu-item index="1-1" @click="newFormVisible = true">Create a new Schedule</el-menu-item>
 					<el-menu-item index="1-2" v-on:click="listRunningSchs">List Running Schedules</el-menu-item>
 					<el-menu-item index="1-3" v-on:click="listFiredSchs">List Fired Schedules</el-menu-item>
-          <el-menu-item index="1-4" >About cronExpression</el-menu-item>
-					<el-menu-item index="1-5" >About us</el-menu-item>
+					<el-menu-item index="1-4" v-on:click="listDeleteJobs">Recycle Bin</el-menu-item>
+          <el-menu-item index="1-5" >About cronExpression</el-menu-item>
+					<el-menu-item index="1-6" >About us</el-menu-item>
 			</el-menu>
 		</el-aside>
 
@@ -30,7 +31,7 @@
       <!-- 定时任务列表 -->
 			<el-main>
 				<el-table :data="tableData">
-					<el-table-column prop="name" label="name" width="150" >
+					<el-table-column prop="name" label="name" width="200" >
 					</el-table-column>
 					<el-table-column prop="cron" label="cronExpression" width="150">
 					</el-table-column>
@@ -55,6 +56,12 @@
 	               @click="editSchedule(scope.$index,scope.row)"
 								 round
 								 v-show='scope.row.status == "CREATE"'>edit</el-button>
+							<el-button
+	 	               size="mini"
+	 	               type="success"
+	 	               @click="editSchedule(scope.$index,scope.row)"
+	 								 round
+	 								 v-show='scope.row.status == "DELETE" || scope.row.status == "FIRED"'>resume</el-button>
               <el-button
                 size="mini"
                 type="danger"
@@ -133,7 +140,7 @@
 	            <span style="width: 150px">{{form.name}}</span>
 	          </el-form-item>
 	          <el-form-item label="cron" :label-width="formLabelWidth" size="small">
-	            <el-input v-model="form.cron" auto-complete="off" style="width: 200px"></el-input>
+	            <el-input v-model="form.cron" auto-complete="off" style="width: 300px"></el-input>
 	          </el-form-item>
 	          <el-form-item label="project" :label-width="formLabelWidth" size="small">
 	            <span style="width: 150px">{{form.project}}</span>
@@ -146,11 +153,37 @@
 	            <el-input v-model="form.description" type="textarea" auto-complete="off" style="width: 300px"></el-input>
 	          </el-form-item>
 	          <el-form-item>
-	            <el-button type="primary" @click="updateSchedule()">Save</el-button>
+	            <el-button type="primary" @click="updateSchedule(false)">Save</el-button>
 	            <el-button @click="editFormVisible = false">Cancel</el-button>
 	          </el-form-item>
 	        </el-form>
 	      </el-dialog>
+
+				<!-- 恢复任务信息 -->
+				<el-dialog title="Resume Schedule" :visible.sync="resumeFormVisible" @close="clearForm">
+		        <el-form :model="form" label-position="left" >
+		          <el-form-item label="name" :label-width="formLabelWidth" size="small">
+		            <span style="width: 150px">{{form.name}}</span>
+		          </el-form-item>
+		          <el-form-item label="cron" :label-width="formLabelWidth" size="small">
+		            <el-input v-model="form.cron" auto-complete="off" style="width: 300px"></el-input>
+		          </el-form-item>
+		          <el-form-item label="project" :label-width="formLabelWidth" size="small">
+		            <span style="width: 150px">{{form.project}}</span>
+		          </el-form-item>
+		          <el-form-item label="url" :label-width="formLabelWidth">
+								<el-input v-model="form.url" auto-complete="off" style="width: 80%">
+		            </el-input>
+		          </el-form-item>
+		          <el-form-item label="description" :label-width="formLabelWidth">
+								<span style="width: 150px">{{form.description}}</span>
+		          </el-form-item>
+		          <el-form-item>
+		            <el-button type="primary" @click="updateSchedule(true)">Resume</el-button>
+		            <el-button @click="editFormVisible = false">Cancel</el-button>
+		          </el-form-item>
+		        </el-form>
+		      </el-dialog>
 	</el-container>
 
 </template>
@@ -165,6 +198,7 @@
                   'GET','POST','PUT','DELETE'
                 ],
                 host: '10.0.0.104:9301',
+								// host: '127.0.0.1:9301',
                 tableData: [],
                 logData:[
                 ],
@@ -172,6 +206,7 @@
                 newFormVisible: false,
 								editFormVisible: false,
                 dialogTableVisible: false,
+								resumeFormVisible: false,
 								Page: {
 									currentPage:1,
 									pageSize:10,
@@ -196,7 +231,6 @@
         methods: {
             //获取所有运行中的任务
             listRunningSchs:function() {
-							  this.head = 'Running Schedules'
                 this.$http.get('http://'+ this.host +'/scheduleManager/getRunningJobs', {}, {
                     headers: {
                     },
@@ -231,7 +265,6 @@
             },
 						//
 						listFiredSchs:function() {
-							this.head = 'Fired Schedules'
 							this.$http.get('http://'+ this.host +'/scheduleManager/getFiredJobs', {}, {
 									headers: {
 									},
@@ -257,6 +290,41 @@
 											temp.jobName = runningSchs[i].jobName;
 											temp.description = runningSchs[i].description;
 											temp.id = runningSchs[i].id;
+											temp.status = runningSchs[i].status;
+											this.tableData[i] = temp;
+									}
+							}, function(response) {
+									// 这里是处理错误的回调
+									console.log(response)
+							});
+						},
+						listDeleteJobs:function() {
+							this.$http.get('http://'+ this.host +'/scheduleManager/getDeleteJobs', {}, {
+									headers: {
+									},
+									emulateJSON: true
+							}).then(function(response) {
+									// 这里是处理正确的回调
+									var runningSchs = response.data["content"]
+									this.tableData = new Array();
+									for (var i = 0; i < runningSchs.length; i++) {
+											var temp = {
+												name: '',
+												cron: '',
+												url: '',
+												jobName: '',
+												project: '',
+												description: ''
+											}
+
+											temp.name = runningSchs[i].name;
+											temp.cron = runningSchs[i].cronExpression;
+											temp.project = runningSchs[i].project;
+											temp.url = runningSchs[i].url;
+											temp.jobName = runningSchs[i].jobName;
+											temp.description = runningSchs[i].description;
+											temp.id = runningSchs[i].id;
+											temp.status = runningSchs[i].status;
 											this.tableData[i] = temp;
 									}
 							}, function(response) {
@@ -335,11 +403,16 @@
 							this.form.url = row.url;
 							this.form.jobName = row.jobName;
 							this.form.project = row.project;
+							this.form.status = row.status;
 							this.form.description = row.description;
-							this.editFormVisible = true;
+							if (row.status == 'CREATE') {
+								this.editFormVisible = true;
+							} else {
+								this.resumeFormVisible = true;
+							}
 						},
 						//更新定时任务
-						updateSchedule() {
+						updateSchedule(isResume) {
 							this.$http.put('http://'+ this.host +'/scheduleManager/updateJobById'
                   , {
                     id:this.form.id,
@@ -356,8 +429,29 @@
                     console.log('exception')
                   } else {
 										this.messageInfo(true,serverMessage);
-                    this.editFormVisible = false
-                    this.listRunningSchs()
+										if (isResume) {
+											this.resumeFormVisible = false;
+										} else {
+											this.editFormVisible = false;
+										}
+										var status = this.form.status;
+										// if (status == 'CREAT') {
+										// 	this.listRunningSchs()
+										// }
+										console.log(this.form);
+										switch (status) {
+											case 'CREATE':
+												this.listRunningSchs();
+												break;
+											case 'DELETE':
+												this.listDeleteJobs();
+												break;
+											case 'FIRED':
+												this.listFiredSchs();
+												break;
+											default:
+												break;
+										}
                   }
               }, function(response) {
                   // 这里是处理错误的回调
